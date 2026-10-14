@@ -1,0 +1,501 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import crypto from 'node:crypto';
+import { prisma } from '../lib/prisma.js';
+import { hashPassword, verifyPassword, generateOtp, hashToken } from '../lib/crypto.js';
+import { signAccessToken } from '../lib/jwt.js';
+import { emailService } from '../services/email.service.js';
+import { requireAuth } from '../middleware/auth.js';
+import { loadEnv } from '../config/env.js';
+
+const env = loadEnv();
+export const authRouter = Router();
+
+const registerSchema = z.object({
+  organizationName: z.string().trim().min(2, 'Organization name must be at least 2 characters'),
+  email: z.string().trim().email('Invalid email address').toLowerCase(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  fullName: z.string().trim().min(2, 'Full name must be at least 2 characters').optional(),
+});
+
+const verifyEmailSchema = z.object({
+  email: z.string().trim().email().toLowerCase(),
+  otp: z.string().trim().length(6, 'OTP must be exactly 6 digits'),
+});
+
+const loginSchema = z.object({
+  email: z.string().trim().email().toLowerCase(),
+  password: z.string().min(1, 'Password is required'),
+  rememberMe: z.boolean().optional().default(false),
+});
+
+const resendOtpSchema = z.object({
+  email: z.string().trim().email().toLowerCase(),
+});
+
+/**
+ * Generate URL-friendly unique slug from organization name
+ */
+function slugify(name) {
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+  const randomSuffix = crypto.randomBytes(3).toString('hex');
+  return `${base || 'org'}-${randomSuffix}`;
+}
+
+/**
+ * Helper to set secure refresh cookie
+ */
+function setRefreshCookie(res, token, rememberMe) {
+  const maxAge = rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000; // 30 days vs 24h
+  res.cookie('clientflow_refresh', token, {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge,
+    path: '/api/v1/auth',
+  });
+}
+
+/**
+ * POST /api/v1/auth/register
+ * Register organization and initial admin user, send 6-digit OTP verification email
+ */
+authRouter.post('/register', async (req, res, next) => {
+  try {
+    const data = registerSchema.parse(req.body);
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        error: { code: 'EMAIL_EXISTS', message: 'An account with this email address already exists.' },
+      });
+    }
+
+    const passwordHash = await hashPassword(data.password);
+    const slug = slugify(data.organizationName);
+    const otp = generateOtp();
+    const tokenHash = hashToken(otp);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    const { user, organization } = await prisma.$transaction(async (tx) => {
+      const org = await tx.organization.create({
+        data: {
+          name: data.organizationName,
+          slug,
+        },
+      });
+
+      const newUser = await tx.user.create({
+        data: {
+          organizationId: org.id,
+          email: data.email,
+          fullName: data.fullName,
+          passwordHash,
+          role: 'ADMIN',
+          status: 'PENDING_VERIFICATION',
+        },
+      });
+
+      await tx.verificationToken.create({
+        data: {
+          userId: newUser.id,
+          tokenHash,
+          type: 'EMAIL_VERIFICATION',
+          expiresAt,
+        },
+      });
+
+      return { user: newUser, organization: org };
+    });
+
+    const verifyUrl = `${env.FRONTEND_ORIGIN}/verify-email?email=${encodeURIComponent(user.email)}&otp=${otp}`;
+
+    await emailService.sendVerificationEmail({
+      email: user.email,
+      fullName: user.fullName,
+      otp,
+      verifyUrl,
+    });
+
+    return res.status(201).json({
+      message: 'Organization created successfully. Please check your email for the verification code.',
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        status: user.status,
+      },
+      organization: {
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+      },
+      expiresIn: 900,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: err.errors[0].message, details: err.errors },
+      });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/auth/verify-email
+ * Validate 6-digit OTP code and activate user account
+ */
+authRouter.post('/verify-email', async (req, res, next) => {
+  try {
+    const { email, otp } = verifyEmailSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        verificationTokens: {
+          where: { type: 'EMAIL_VERIFICATION' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'User account not found.' },
+      });
+    }
+
+    if (user.status === 'ACTIVE') {
+      return res.status(200).json({
+        message: 'Account is already verified. You can proceed to log in.',
+      });
+    }
+
+    const tokenRecord = user.verificationTokens[0];
+    if (!tokenRecord) {
+      return res.status(400).json({
+        error: { code: 'TOKEN_NOT_FOUND', message: 'No pending verification token found. Please request a new code.' },
+      });
+    }
+
+    if (tokenRecord.attempts >= 5) {
+      return res.status(429).json({
+        error: { code: 'TOO_MANY_ATTEMPTS', message: 'Too many incorrect attempts. Please request a new verification code.' },
+      });
+    }
+
+    if (new Date() > tokenRecord.expiresAt) {
+      return res.status(410).json({
+        error: { code: 'TOKEN_EXPIRED', message: 'Verification code has expired. Please request a new code.' },
+      });
+    }
+
+    const candidateHash = hashToken(otp);
+    if (candidateHash !== tokenRecord.tokenHash) {
+      await prisma.verificationToken.update({
+        where: { id: tokenRecord.id },
+        data: { attempts: { increment: 1 } },
+      });
+      return res.status(400).json({
+        error: { code: 'INVALID_CODE', message: 'Invalid verification code. Please check and try again.' },
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { status: 'ACTIVE' },
+      }),
+      prisma.verificationToken.delete({
+        where: { id: tokenRecord.id },
+      }),
+    ]);
+
+    return res.status(200).json({
+      message: 'Email verified successfully! You can now log in.',
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: err.errors[0].message },
+      });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/auth/resend-otp
+ */
+authRouter.post('/resend-otp', async (req, res, next) => {
+  try {
+    const { email } = resendOtpSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'User account not found.' },
+      });
+    }
+
+    if (user.status === 'ACTIVE') {
+      return res.status(400).json({
+        error: { code: 'ALREADY_ACTIVE', message: 'Account is already verified and active.' },
+      });
+    }
+
+    const otp = generateOtp();
+    const tokenHash = hashToken(otp);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.$transaction([
+      prisma.verificationToken.deleteMany({
+        where: { userId: user.id, type: 'EMAIL_VERIFICATION' },
+      }),
+      prisma.verificationToken.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          type: 'EMAIL_VERIFICATION',
+          expiresAt,
+        },
+      }),
+    ]);
+
+    const verifyUrl = `${env.FRONTEND_ORIGIN}/verify-email?email=${encodeURIComponent(user.email)}&otp=${otp}`;
+
+    await emailService.sendVerificationEmail({
+      email: user.email,
+      fullName: user.fullName,
+      otp,
+      verifyUrl,
+    });
+
+    return res.status(200).json({
+      message: 'A fresh verification code has been dispatched.',
+      expiresIn: 900,
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: err.errors[0].message },
+      });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/auth/login
+ * Authenticates user, checks ACTIVE status, issues access token + refresh cookie
+ */
+authRouter.post('/login', async (req, res, next) => {
+  try {
+    const { email, password, rememberMe } = loginSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { organization: true },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
+      });
+    }
+
+    const passwordValid = await verifyPassword(password, user.passwordHash);
+    if (!passwordValid) {
+      return res.status(401).json({
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' },
+      });
+    }
+
+    if (user.status === 'PENDING_VERIFICATION') {
+      return res.status(403).json({
+        error: {
+          code: 'VERIFICATION_REQUIRED',
+          message: 'Please verify your email address with the 6-digit code before logging in.',
+        },
+      });
+    }
+
+    if (user.status === 'SUSPENDED') {
+      return res.status(403).json({
+        error: { code: 'ACCOUNT_SUSPENDED', message: 'Your account has been suspended. Please contact support.' },
+      });
+    }
+
+    const rawRefreshToken = crypto.randomBytes(40).toString('hex');
+    const refreshTokenHash = hashToken(rawRefreshToken);
+    const sessionDays = rememberMe ? 30 : 1;
+    const expiresAt = new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000);
+
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshTokenHash,
+        rememberMe,
+        expiresAt,
+      },
+    });
+
+    const accessToken = signAccessToken(user);
+    setRefreshCookie(res, rawRefreshToken, rememberMe);
+
+    return res.status(200).json({
+      message: 'Login successful',
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        status: user.status,
+        organization: {
+          id: user.organization.id,
+          name: user.organization.name,
+          slug: user.organization.slug,
+        },
+      },
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: err.errors[0].message },
+      });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/auth/refresh
+ * Rotate refresh token and return new access token
+ */
+authRouter.post('/refresh', async (req, res, next) => {
+  try {
+    const rawRefreshToken = req.cookies?.clientflow_refresh;
+    if (!rawRefreshToken) {
+      return res.status(401).json({
+        error: { code: 'REFRESH_TOKEN_REQUIRED', message: 'No active session found.' },
+      });
+    }
+
+    const refreshTokenHash = hashToken(rawRefreshToken);
+
+    const session = await prisma.session.findFirst({
+      where: {
+        refreshTokenHash,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        user: { include: { organization: true } },
+      },
+    });
+
+    if (!session || session.user.status !== 'ACTIVE') {
+      res.clearCookie('clientflow_refresh', { path: '/api/v1/auth' });
+      return res.status(401).json({
+        error: { code: 'INVALID_SESSION', message: 'Session is invalid or expired. Please log in again.' },
+      });
+    }
+
+    // Refresh token rotation: revoke old, create new
+    const newRawRefreshToken = crypto.randomBytes(40).toString('hex');
+    const newRefreshTokenHash = hashToken(newRawRefreshToken);
+
+    await prisma.$transaction([
+      prisma.session.update({
+        where: { id: session.id },
+        data: { revokedAt: new Date() },
+      }),
+      prisma.session.create({
+        data: {
+          userId: session.user.id,
+          refreshTokenHash: newRefreshTokenHash,
+          rememberMe: session.rememberMe,
+          expiresAt: session.expiresAt,
+        },
+      }),
+    ]);
+
+    const newAccessToken = signAccessToken(session.user);
+    setRefreshCookie(res, newRawRefreshToken, session.rememberMe);
+
+    return res.status(200).json({
+      accessToken: newAccessToken,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/auth/logout
+ * Revoke session and clear refresh cookie
+ */
+authRouter.post('/logout', async (req, res, next) => {
+  try {
+    const rawRefreshToken = req.cookies?.clientflow_refresh;
+    if (rawRefreshToken) {
+      const refreshTokenHash = hashToken(rawRefreshToken);
+      await prisma.session.updateMany({
+        where: { refreshTokenHash },
+        data: { revokedAt: new Date() },
+      });
+    }
+
+    res.clearCookie('clientflow_refresh', { path: '/api/v1/auth' });
+    return res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/auth/me
+ * Protected endpoint returning profile of current user
+ */
+authRouter.get('/me', requireAuth, async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: { organization: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'User profile not found.' },
+      });
+    }
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        status: user.status,
+        createdAt: user.createdAt,
+        organization: {
+          id: user.organization.id,
+          name: user.organization.name,
+          slug: user.organization.slug,
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
