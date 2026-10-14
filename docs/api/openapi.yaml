@@ -1,0 +1,153 @@
+openapi: 3.1.0
+info:
+  title: ClientFlow REST API
+  version: 0.1.0
+  description: Initial Phase 1 endpoint inventory; request/response schemas will be finalized alongside implementation.
+servers:
+  - url: http://localhost:4000/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register organization and initial administrator
+      security: []
+      responses:
+        '201': { description: Organization and administrator created }
+        '400': { description: Invalid request }
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Authenticate user
+      security: []
+      responses:
+        '200': { description: Authenticated }
+        '401': { description: Invalid credentials }
+  /auth/refresh:
+    post:
+      tags: [Authentication]
+      summary: Rotate refresh token and issue new access token
+      security: []
+      responses:
+        '200': { description: Token refreshed }
+        '401': { description: Session invalid }
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke current session
+      responses:
+        '204': { description: Logged out }
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Current user
+      responses:
+        '200': { description: Current user }
+  /clients:
+    get:
+      tags: [Clients]
+      summary: List authorized clients
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: search, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Paginated clients }
+    post:
+      tags: [Clients]
+      summary: Create client
+      responses:
+        '201': { description: Client created }
+  /clients/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Clients]
+      summary: Get authorized client
+      responses:
+        '200': { description: Client }
+        '404': { description: Not found or not accessible }
+    patch:
+      tags: [Clients]
+      summary: Update client
+      responses:
+        '200': { description: Client updated }
+    delete:
+      tags: [Clients]
+      summary: Archive client
+      responses:
+        '204': { description: Client archived }
+  /leads:
+    get:
+      tags: [Leads]
+      summary: List authorized leads
+      responses:
+        '200': { description: Leads }
+    post:
+      tags: [Leads]
+      summary: Create lead
+      responses:
+        '201': { description: Lead created }
+  /leads/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Leads]
+      summary: Get lead
+      responses:
+        '200': { description: Lead }
+    patch:
+      tags: [Leads]
+      summary: Update lead or stage
+      responses:
+        '200': { description: Lead updated }
+  /leads/{id}/convert:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Leads]
+      summary: Atomically convert lead to client
+      responses:
+        '200': { description: Converted client }
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: List authorized tasks
+      responses:
+        '200': { description: Tasks }
+    post:
+      tags: [Tasks]
+      summary: Create task
+      responses:
+        '201': { description: Task created }
+  /tasks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Tasks]
+      summary: Get task
+      responses:
+        '200': { description: Task }
+    patch:
+      tags: [Tasks]
+      summary: Update task
+      responses:
+        '200': { description: Task updated }
+    delete:
+      tags: [Tasks]
+      summary: Delete task
+      responses:
+        '204': { description: Task deleted }
+  /dashboard/summary:
+    get:
+      tags: [Dashboard]
+      summary: Get organization-scoped metrics
+      responses:
+        '200': { description: Dashboard metrics }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
