@@ -1,0 +1,213 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+}
+
+enum TokenType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  WON
+  LOST
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InteractionType {
+  CALL
+  EMAIL
+  MEETING
+  NOTE
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  slug      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users        User[]
+  clients      Client[]
+  leads        Lead[]
+  tasks        Task[]
+  interactions Interaction[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  email          String     @unique @db.VarChar(255)
+  passwordHash   String     @map("password_hash") @db.VarChar(255)
+  fullName       String?    @map("full_name") @db.VarChar(255)
+  role           Role       @default(STAFF)
+  status         UserStatus @default(PENDING_VERIFICATION)
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions           Session[]
+  verificationTokens VerificationToken[]
+  assignedClients    Client[]            @relation("ClientOwner")
+  assignedLeads      Lead[]              @relation("LeadOwner")
+  assignedTasks      Task[]              @relation("TaskAssignee")
+  interactions       Interaction[]       @relation("InteractionAuthor")
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model VerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") @db.VarChar(255)
+  type      TokenType @default(EMAIL_VERIFICATION)
+  expiresAt DateTime  @map("expires_at")
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("verification_tokens")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @map("refresh_token_hash") @db.VarChar(255)
+  rememberMe       Boolean   @default(false) @map("remember_me")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Client {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  ownerId        String?   @map("owner_id") @db.Uuid
+  name           String    @db.VarChar(255)
+  email          String?   @db.VarChar(255)
+  phone          String?   @db.VarChar(50)
+  company        String?   @db.VarChar(255)
+  status         String    @default("active") @db.VarChar(50)
+  archivedAt     DateTime? @map("archived_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner        User?         @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  tasks        Task[]
+  interactions Interaction[]
+  convertedFrom Lead?        @relation("LeadConvertedClient")
+
+  @@index([organizationId])
+  @@index([organizationId, ownerId])
+  @@map("clients")
+}
+
+model Lead {
+  id                String    @id @default(uuid()) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  ownerId           String?   @map("owner_id") @db.Uuid
+  name              String    @db.VarChar(255)
+  email             String?   @db.VarChar(255)
+  company           String?   @db.VarChar(255)
+  stage             LeadStage @default(NEW)
+  convertedClientId String?   @unique @map("converted_client_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner           User?        @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  convertedClient Client?      @relation("LeadConvertedClient", fields: [convertedClientId], references: [id], onDelete: SetNull)
+  tasks           Task[]
+
+  @@index([organizationId])
+  @@index([organizationId, stage])
+  @@map("leads")
+}
+
+model Task {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  assigneeId     String?      @map("assignee_id") @db.Uuid
+  clientId       String?      @map("client_id") @db.Uuid
+  leadId         String?      @map("lead_id") @db.Uuid
+  title          String       @db.VarChar(255)
+  priority       TaskPriority @default(MEDIUM)
+  status         TaskStatus   @default(TODO)
+  dueAt          DateTime?    @map("due_at")
+  completedAt    DateTime?    @map("completed_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignee     User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  client       Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, assigneeId])
+  @@map("tasks")
+}
+
+model Interaction {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  clientId       String          @map("client_id") @db.Uuid
+  authorId       String?         @map("author_id") @db.Uuid
+  type           InteractionType
+  notes          String          @db.Text
+  occurredAt     DateTime        @default(now()) @map("occurred_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  author       User?        @relation("InteractionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([clientId])
+  @@map("interactions")
+}
