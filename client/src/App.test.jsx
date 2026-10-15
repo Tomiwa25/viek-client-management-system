@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { authApi, ApiError, request } from './lib/api';
+import { authApi, crmApi, ApiError, request } from './lib/api';
 
 const createLocalStorageMock = () => {
   let store = {};
@@ -97,12 +97,77 @@ describe('Auth Client & Form Logic Tests', () => {
     });
   });
 
-  describe('OTP Sanitize Logic', () => {
-    it('strips non-numeric characters and enforces 6-digit length', () => {
-      const rawPasted = ' 492-018 abc ';
-      const sanitized = rawPasted.replace(/\D/g, '').slice(0, 6);
-      expect(sanitized).toBe('492018');
-      expect(sanitized.length).toBe(6);
+  describe('CRM API Client Methods', () => {
+    it('dispatches lead conversion request with optional phone and notes', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ client: { id: 'client-1', name: 'Converted Corp' } }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await crmApi.leads.convert('lead-123', {
+        phone: '123-456-7890',
+        notes: 'Signed deal',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/leads/lead-123/convert',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ phone: '123-456-7890', notes: 'Signed deal' }),
+        })
+      );
+      expect(result.client.name).toBe('Converted Corp');
+    });
+
+    it('dispatches task status update to COMPLETED', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ task: { id: 'task-1', status: 'COMPLETED' } }),
+      });
+      global.fetch = mockFetch;
+
+      await crmApi.tasks.update('task-1', { status: 'COMPLETED' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/tasks/task-1',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'COMPLETED' }),
+        })
+      );
+    });
+
+    it('dispatches interaction log for client', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ interaction: { id: 'int-1', type: 'MEETING' } }),
+      });
+      global.fetch = mockFetch;
+
+      await crmApi.interactions.create({
+        clientId: 'client-1',
+        type: 'MEETING',
+        notes: 'Quarterly review',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/interactions',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            clientId: 'client-1',
+            type: 'MEETING',
+            notes: 'Quarterly review',
+          }),
+        })
+      );
     });
   });
 });

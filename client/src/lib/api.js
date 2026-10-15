@@ -80,3 +80,44 @@ export const authApi = {
       method: 'GET',
     }),
 };
+
+function buildQuery(params = {}) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, String(value));
+    }
+  }
+  const str = query.toString();
+  return str ? `?${str}` : '';
+}
+
+export const crmApi = {
+  leads: {
+    list: (params) => request(`/api/v1/leads${buildQuery(params)}`),
+    create: (data) => request('/api/v1/leads', { method: 'POST', body: JSON.stringify(data) }),
+    get: (id) => request(`/api/v1/leads/${id}`),
+    update: (id, data) => request(`/api/v1/leads/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    convert: (id, data = {}) => request(`/api/v1/leads/${id}/convert`, { method: 'POST', body: JSON.stringify(data) }),
+    delete: (id) => request(`/api/v1/leads/${id}`, { method: 'DELETE' }),
+  },
+  clients: {
+    list: (params) => request(`/api/v1/clients${buildQuery(params)}`),
+    create: (data) => request('/api/v1/clients', { method: 'POST', body: JSON.stringify(data) }),
+    get: (id) => request(`/api/v1/clients/${id}`),
+    update: (id, data) => request(`/api/v1/clients/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    archive: (id) => request(`/api/v1/clients/${id}`, { method: 'DELETE' }),
+  },
+  tasks: {
+    list: (params) => request(`/api/v1/tasks${buildQuery(params)}`),
+    create: (data) => request('/api/v1/tasks', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id) => request(`/api/v1/tasks/${id}`, { method: 'DELETE' }),
+  },
+  interactions: {
+    list: (params) => request(`/api/v1/interactions${buildQuery(params)}`),
+    create: (data) => request('/api/v1/interactions', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (id) => request(`/api/v1/interactions/${id}`, { method: 'DELETE' }),
+  },
+};
+

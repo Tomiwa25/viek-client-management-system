@@ -1,78 +1,108 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
+import { crmApi } from '../lib/api';
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+
+  const { data: leadsData } = useQuery({
+    queryKey: ['leads', 'metric'],
+    queryFn: () => crmApi.leads.list({ limit: 1 }),
+  });
+
+  const { data: clientsData } = useQuery({
+    queryKey: ['clients', 'metric'],
+    queryFn: () => crmApi.clients.list({ limit: 1 }),
+  });
+
+  const { data: tasksData } = useQuery({
+    queryKey: ['tasks', 'metric'],
+    queryFn: () => crmApi.tasks.list({ status: 'TODO', limit: 1 }),
+  });
+
+  const totalLeads = leadsData?.pagination?.total ?? '—';
+  const totalClients = clientsData?.pagination?.total ?? '—';
+  const pendingTasks = tasksData?.pagination?.total ?? '—';
 
   return (
-    <div className="dashboard-container">
-      <header className="dashboard-header">
-        <div className="dashboard-brand">
-          <span className="brand-badge">CLIENTFLOW</span>
-          <span className="tenant-slug">{user?.organization?.name || 'Workspace'}</span>
+    <div className="crm-view-container">
+      <section className="welcome-hero">
+        <div className="hero-content">
+          <span className="eyebrow">ORGANIZATION DASHBOARD</span>
+          <h1>Welcome, {user?.fullName || user?.email}!</h1>
+          <p>
+            Workspace active for <strong>{user?.organization?.name}</strong>. Manage your sales pipeline, clients, and action items in one place.
+          </p>
         </div>
-        <div className="dashboard-user-bar">
-          <div className="user-profile-badge">
-            <span className="user-avatar">
-              {(user?.fullName || user?.email || 'U').charAt(0).toUpperCase()}
-            </span>
-            <div className="user-details">
-              <span className="user-name">{user?.fullName || 'Team Member'}</span>
-              <span className="user-email">{user?.email}</span>
-            </div>
-          </div>
-          <button onClick={logout} className="btn btn-outline-sm">
-            Sign Out
-          </button>
+        <div className="hero-status-pill">
+          <span className="status-dot online"></span>
+          <span>Tenant Isolated: {user?.organization?.slug}</span>
         </div>
-      </header>
+      </section>
 
-      <main className="dashboard-main">
-        <section className="welcome-hero">
-          <div className="hero-content">
-            <span className="eyebrow">WORKSPACE ACTIVE</span>
-            <h1>Welcome to {user?.organization?.name}</h1>
-            <p>
-              Your multi-tenant workspace is fully initialized and your email is verified.
-            </p>
+      {/* Quick Metrics Bar */}
+      <section className="metrics-row">
+        <Link to="/leads" className="metric-box">
+          <div className="metric-header">
+            <span className="metric-title">Sales Prospects</span>
+            <span className="metric-icon">🎯</span>
           </div>
-          <div className="hero-status-pill">
-            <span className="status-dot online"></span>
-            <span>Organization Admin: {user?.role}</span>
-          </div>
-        </section>
+          <div className="metric-value">{totalLeads}</div>
+          <span className="metric-hint">Pipeline Leads →</span>
+        </Link>
 
-        <section className="stats-grid">
-          <div className="stat-card">
-            <h3>Organization Profile</h3>
-            <p className="stat-detail"><strong>Name:</strong> {user?.organization?.name}</p>
-            <p className="stat-detail"><strong>Slug:</strong> <code>{user?.organization?.slug}</code></p>
-            <p className="stat-detail"><strong>Workspace ID:</strong> <span className="mono-text">{user?.organization?.id}</span></p>
+        <Link to="/clients" className="metric-box">
+          <div className="metric-header">
+            <span className="metric-title">Active Clients</span>
+            <span className="metric-icon">🏢</span>
           </div>
+          <div className="metric-value">{totalClients}</div>
+          <span className="metric-hint">View Portfolio →</span>
+        </Link>
 
-          <div className="stat-card">
-            <h3>Session & Identity</h3>
-            <p className="stat-detail"><strong>User ID:</strong> <span className="mono-text">{user?.id}</span></p>
-            <p className="stat-detail"><strong>Status:</strong> <span className="badge badge-success">{user?.status}</span></p>
-            <p className="stat-detail"><strong>Role:</strong> <span className="badge badge-primary">{user?.role}</span></p>
+        <Link to="/tasks" className="metric-box">
+          <div className="metric-header">
+            <span className="metric-title">Pending Action Items</span>
+            <span className="metric-icon">⚡</span>
           </div>
+          <div className="metric-value">{pendingTasks}</div>
+          <span className="metric-hint">Task Tracker →</span>
+        </Link>
+      </section>
 
-          <div className="stat-card highlight-card">
-            <h3>Next Phase: CRM Modules</h3>
-            <p className="stat-description">
-              The foundational authentication and workspace layer is ready.
-            </p>
-            <ul className="module-checklist">
-              <li>✓ Multi-tenant Organization Onboarding</li>
-              <li>✓ 6-Digit Mail-Log OTP Verification</li>
-              <li>✓ Secure Session & JWT Auth Context</li>
-              <li className="pending-item">⏳ Leads Module & Atomic Client Conversion</li>
-              <li className="pending-item">⏳ Client Management & Pipeline Tracking</li>
-              <li className="pending-item">⏳ Task Scheduling & Activity Logs</li>
-            </ul>
+      {/* Workspace Profile & Status */}
+      <section className="stats-grid">
+        <div className="stat-card">
+          <h3>Tenant Namespace</h3>
+          <p className="stat-detail"><strong>Organization:</strong> {user?.organization?.name}</p>
+          <p className="stat-detail"><strong>Tenant Slug:</strong> <code>{user?.organization?.slug}</code></p>
+          <p className="stat-detail"><strong>Workspace ID:</strong> <span className="mono-text">{user?.organization?.id}</span></p>
+        </div>
+
+        <div className="stat-card">
+          <h3>Authenticated Identity</h3>
+          <p className="stat-detail"><strong>Email:</strong> {user?.email}</p>
+          <p className="stat-detail"><strong>Role:</strong> <span className="badge badge-primary">{user?.role}</span></p>
+          <p className="stat-detail"><strong>Status:</strong> <span className="badge badge-success">{user?.status}</span></p>
+        </div>
+
+        <div className="stat-card highlight-card">
+          <h3>Quick CRM Actions</h3>
+          <div className="quick-actions-list">
+            <Link to="/leads" className="btn btn-outline-sm">
+              + Add / Qualify Leads
+            </Link>
+            <Link to="/clients" className="btn btn-outline-sm">
+              + Log Client Activity
+            </Link>
+            <Link to="/tasks" className="btn btn-outline-sm">
+              + Create Action Item
+            </Link>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
     </div>
   );
 }
