@@ -40,12 +40,12 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma Client
-        run: npx --prefix server prisma generate
+        run: npx prisma generate --schema=./server/prisma/schema.prisma
 
       - name: Run Prisma Database Migrations
         env:
           DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/viek_client_management_test_db
-        run: npx --prefix server prisma migrate deploy
+        run: npx prisma migrate deploy --schema=./server/prisma/schema.prisma
 
       - name: Run Tests Across Workspaces
         env:

@@ -18,5 +18,8 @@
   },
   "devDependencies": {
     "prettier": "^3.6.2"
+  },
+  "prisma": {
+    "schema": "server/prisma/schema.prisma"
   }
 }
