@@ -95,6 +95,56 @@ describe('Auth Client & Form Logic Tests', () => {
         })
       );
     });
+
+    it('correctly dispatches forgotPassword payload with email', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ message: 'If an account exists, a reset code was sent' }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await authApi.forgotPassword({ email: 'user@test.org' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/auth/forgot-password',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ email: 'user@test.org' }),
+        })
+      );
+      expect(result.message).toContain('reset code was sent');
+    });
+
+    it('correctly dispatches resetPassword payload with otp and password', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ message: 'Password reset successfully' }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await authApi.resetPassword({
+        email: 'user@test.org',
+        otp: '123456',
+        newPassword: 'NewStrongPassword!123',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/auth/reset-password',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            email: 'user@test.org',
+            otp: '123456',
+            newPassword: 'NewStrongPassword!123',
+          }),
+        })
+      );
+      expect(result.message).toBe('Password reset successfully');
+    });
   });
 
   describe('CRM API Client Methods', () => {

@@ -140,4 +140,66 @@ describe('Auth & OTP lifecycle', () => {
 
     expect(res.status).toBe(204);
   });
+
+  it('handles forgot-password and resets password with valid OTP', async () => {
+    const app = createApp();
+
+    // 1. Request password reset
+    const forgotRes = await request(app)
+      .post('/api/v1/auth/forgot-password')
+      .send({ email: testEmail });
+
+    expect(forgotRes.status).toBe(200);
+
+    // 2. Fetch reset token from DB
+    const user = await prisma.user.findUnique({
+      where: { email: testEmail },
+      include: { verificationTokens: true },
+    });
+    const resetToken = user.verificationTokens.find((t) => t.type === 'PASSWORD_RESET');
+    expect(resetToken).toBeDefined();
+
+    // In unit tests, verify with correct token or generate a known OTP
+    // Let's create a known token directly in DB to test the endpoint verification logic
+    const { hashToken } = await import('../lib/crypto.js');
+    const knownOtp = '654321';
+    await prisma.verificationToken.update({
+      where: { id: resetToken.id },
+      data: { tokenHash: hashToken(knownOtp) },
+    });
+
+    // 3. Reset password with new password
+    const resetRes = await request(app)
+      .post('/api/v1/auth/reset-password')
+      .send({
+        email: testEmail,
+        otp: knownOtp,
+        newPassword: 'BrandNewPassword123!',
+      });
+
+    expect(resetRes.status).toBe(200);
+    expect(resetRes.body.message).toContain('Password reset successfully');
+
+    // 4. Verify login succeeds with new password
+    const newLoginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({
+        email: testEmail,
+        password: 'BrandNewPassword123!',
+      });
+
+    expect(newLoginRes.status).toBe(200);
+    expect(newLoginRes.body.accessToken).toBeDefined();
+
+    // 5. Verify old password fails
+    const oldLoginRes = await request(app)
+      .post('/api/v1/auth/login')
+      .send({
+        email: testEmail,
+        password: 'SuperSecret123!',
+      });
+
+    expect(oldLoginRes.status).toBe(401);
+  });
 });
+

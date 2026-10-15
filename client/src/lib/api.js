@@ -79,6 +79,18 @@ export const authApi = {
     request('/api/v1/auth/me', {
       method: 'GET',
     }),
+
+  forgotPassword: ({ email }) =>
+    request('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: ({ email, otp, newPassword }) =>
+    request('/api/v1/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, newPassword }),
+    }),
 };
 
 function buildQuery(params = {}) {

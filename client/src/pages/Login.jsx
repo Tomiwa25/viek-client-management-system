@@ -13,6 +13,7 @@ export default function Login() {
 
   const [email, setEmail] = useState(urlEmail);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isUnverified, setIsUnverified] = useState(false);
@@ -96,16 +97,30 @@ export default function Login() {
           <div className="form-group">
             <div className="label-with-link">
               <label htmlFor="loginPassword">Password</label>
+              <Link to="/forgot-password" className="auth-link-sm">
+                Forgot password?
+              </Link>
             </div>
-            <input
-              id="loginPassword"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              autoFocus={Boolean(urlEmail)}
-            />
+            <div className="password-wrapper">
+              <input
+                id="loginPassword"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                autoFocus={Boolean(urlEmail)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="btn-toggle-eye"
+                title={showPassword ? 'Hide password' : 'View password'}
+                tabIndex={-1}
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+            </div>
           </div>
 
           <div className="form-options">

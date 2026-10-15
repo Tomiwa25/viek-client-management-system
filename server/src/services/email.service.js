@@ -36,9 +36,22 @@ export const emailService = {
   /**
    * Send password reset email
    */
-  async sendPasswordResetEmail({ email, fullName, resetUrl }) {
+  async sendPasswordResetEmail({ email, fullName, otp, resetUrl }) {
     if (env.MAIL_DRIVER === 'log' || env.NODE_ENV === 'test') {
-      console.log(`\n📬 [EMAIL LOG] Password Reset -> To: ${email} | URL: ${resetUrl}\n`);
+      const separator = '═'.repeat(60);
+      console.log(`\n${separator}`);
+      console.log(`📬 [EMAIL LOG] - PASSWORD RESET`);
+      console.log(`To: ${fullName ? `${fullName} <${email}>` : email}`);
+      console.log(`Subject: Reset your password - ClientFlow`);
+      console.log(`────────────────────────────────────────────────────────────`);
+      console.log(`Hello${fullName ? ` ${fullName}` : ''},`);
+      console.log(`We received a request to reset your ClientFlow password.`);
+      console.log(`Your 6-digit password reset code is:`);
+      console.log(`\n        >>>  ${otp}  <<<\n`);
+      console.log(`This code will expire in 15 minutes.`);
+      console.log(`Or click the button / link below to reset your password directly:`);
+      console.log(`${resetUrl}`);
+      console.log(`${separator}\n`);
       return { success: true, driver: 'log' };
     }
     return { success: true, driver: 'noop' };
