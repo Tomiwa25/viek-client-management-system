@@ -3,6 +3,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { authRouter } from './src/routes/auth.routes.js';
+import { leadsRouter } from './src/routes/leads.routes.js';
+import { clientsRouter } from './src/routes/clients.routes.js';
+import { tasksRouter } from './src/routes/tasks.routes.js';
+import { interactionsRouter } from './src/routes/interactions.routes.js';
 
 export function createApp({ frontendOrigin = 'http://localhost:5173' } = {}) {
   const app = express();
@@ -14,6 +18,10 @@ export function createApp({ frontendOrigin = 'http://localhost:5173' } = {}) {
 
   app.get('/api/v1/health', (_req, res) => res.json({ status: 'ok', service: 'clientflow-api' }));
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/leads', leadsRouter);
+  app.use('/api/v1/clients', clientsRouter);
+  app.use('/api/v1/tasks', tasksRouter);
+  app.use('/api/v1/interactions', interactionsRouter);
 
   app.use('/api/v1', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found' } }));
   app.use((err, _req, res, _next) => {
