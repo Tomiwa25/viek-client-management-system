@@ -1,12 +1,42 @@
-import { Link, Route, Routes } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-function Home() {
-  const { data, isPending, isError } = useQuery({ queryKey: ['health'], queryFn: async () => {
-    const response = await fetch('/api/v1/health');
-    if (!response.ok) throw new Error('API unavailable');
-    return response.json();
-  }, retry: false });
-  return <main className="panel"><p className="eyebrow">CLIENTFLOW / PHASE 2</p><h1>Client management, organized.</h1><p>Full-stack foundation: React, Express and PostgreSQL connectivity.</p><p role="status">API: {isPending ? 'Checking…' : isError ? 'Unavailable — start the backend' : data.status}</p><Link to="/about">About this build →</Link></main>;
+import React from 'react';
+import { Routes, Route, Link } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Register from './pages/Register';
+import VerifyEmail from './pages/VerifyEmail';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+
+function NotFound() {
+  return (
+    <div className="auth-container">
+      <div className="auth-card not-found-card">
+        <h1>404</h1>
+        <h2>Page not found</h2>
+        <p>The page you are looking for does not exist or has been moved.</p>
+        <Link to="/" className="btn btn-primary">Return to Home</Link>
+      </div>
+    </div>
+  );
 }
-function About() { return <main className="panel"><h1>About ClientFlow</h1><p>Client, lead and task modules will be implemented in later phases.</p><Link to="/">← Home</Link></main>; }
-export default function App() { return <Routes><Route path="/" element={<Home />} /><Route path="/about" element={<About />} /><Route path="*" element={<main className="panel"><h1>Page not found</h1><Link to="/">Home</Link></main>} /></Routes>; }
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AuthProvider>
+  );
+}
