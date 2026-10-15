@@ -10,6 +10,7 @@ export default function Login() {
 
   const urlEmail = searchParams.get('email') || '';
   const isVerifiedBanner = searchParams.get('verified') === '1';
+  const isResetSuccessBanner = searchParams.get('reset') === 'success';
 
   const [email, setEmail] = useState(urlEmail);
   const [password, setPassword] = useState('');
@@ -60,6 +61,13 @@ export default function Login() {
           <div className="alert alert-success" role="status">
             <span className="alert-icon">✓</span>
             <span>Your email was successfully verified! Please sign in with your credentials.</span>
+          </div>
+        )}
+
+        {isResetSuccessBanner && (
+          <div className="alert alert-success" role="status">
+            <span className="alert-icon">✓</span>
+            <span>Your password has been reset successfully! Please sign in with your new password.</span>
           </div>
         )}
 

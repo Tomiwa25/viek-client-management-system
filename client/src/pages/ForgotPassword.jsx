@@ -20,7 +20,7 @@ export default function ForgotPassword() {
 
     try {
       await authApi.forgotPassword({ email: email.trim().toLowerCase() });
-      navigate(`/reset-password?email=${encodeURIComponent(email.trim().toLowerCase())}`, {
+      navigate(`/verify-reset-code?email=${encodeURIComponent(email.trim().toLowerCase())}`, {
         state: {
           email: email.trim().toLowerCase(),
           message: 'If an account exists, a 6-digit password reset code has been dispatched to your email.',

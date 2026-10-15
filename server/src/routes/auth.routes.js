@@ -37,6 +37,11 @@ const forgotPasswordSchema = z.object({
   email: z.string().trim().email('Invalid email address').toLowerCase(),
 });
 
+const verifyResetCodeSchema = z.object({
+  email: z.string().trim().email('Invalid email address').toLowerCase(),
+  otp: z.string().trim().min(6, 'Reset code must be at least 6 characters'),
+});
+
 const resetPasswordSchema = z.object({
   email: z.string().trim().email('Invalid email address').toLowerCase(),
   otp: z.string().trim().min(6, 'Reset code must be at least 6 characters'),
@@ -561,6 +566,77 @@ authRouter.post('/forgot-password', async (req, res, next) => {
 
     return res.status(200).json({
       message: 'Password reset code sent. Please check your email.',
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: err.errors[0].message, details: err.errors },
+      });
+    }
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/auth/verify-reset-code
+ * Validate 6-digit OTP before presenting new password entry screen
+ */
+authRouter.post('/verify-reset-code', async (req, res, next) => {
+  try {
+    const data = verifyResetCodeSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        error: { code: 'INVALID_RESET_CODE', message: 'Invalid or expired password reset code.' },
+      });
+    }
+
+    const tokenRecord = await prisma.verificationToken.findFirst({
+      where: {
+        userId: user.id,
+        type: 'PASSWORD_RESET',
+      },
+    });
+
+    if (!tokenRecord) {
+      return res.status(400).json({
+        error: { code: 'INVALID_RESET_CODE', message: 'No active password reset request found.' },
+      });
+    }
+
+    if (new Date() > tokenRecord.expiresAt) {
+      await prisma.verificationToken.delete({ where: { id: tokenRecord.id } });
+      return res.status(400).json({
+        error: { code: 'EXPIRED_RESET_CODE', message: 'Password reset code has expired. Please request a new one.' },
+      });
+    }
+
+    if (tokenRecord.attempts >= 5) {
+      await prisma.verificationToken.delete({ where: { id: tokenRecord.id } });
+      return res.status(429).json({
+        error: { code: 'MAX_ATTEMPTS_EXCEEDED', message: 'Too many failed attempts. Please request a new reset code.' },
+      });
+    }
+
+    const providedHash = hashToken(data.otp);
+    if (providedHash !== tokenRecord.tokenHash) {
+      await prisma.verificationToken.update({
+        where: { id: tokenRecord.id },
+        data: { attempts: { increment: 1 } },
+      });
+
+      return res.status(400).json({
+        error: { code: 'INVALID_OTP', message: 'Invalid password reset code.' },
+      });
+    }
+
+    return res.status(200).json({
+      valid: true,
+      message: 'Password reset code is valid.',
     });
   } catch (err) {
     if (err instanceof z.ZodError) {

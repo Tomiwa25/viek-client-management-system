@@ -117,6 +117,27 @@ describe('Auth Client & Form Logic Tests', () => {
       expect(result.message).toContain('reset code was sent');
     });
 
+    it('correctly dispatches verifyResetCode payload with email and otp', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ valid: true, message: 'Password reset code is valid.' }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await authApi.verifyResetCode({ email: 'user@test.org', otp: '123456' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/auth/verify-reset-code',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ email: 'user@test.org', otp: '123456' }),
+        })
+      );
+      expect(result.valid).toBe(true);
+    });
+
     it('correctly dispatches resetPassword payload with otp and password', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,

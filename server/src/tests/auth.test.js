@@ -168,6 +168,20 @@ describe('Auth & OTP lifecycle', () => {
       data: { tokenHash: hashToken(knownOtp) },
     });
 
+    // 2b. Test verify-reset-code with wrong OTP
+    const wrongVerifyRes = await request(app)
+      .post('/api/v1/auth/verify-reset-code')
+      .send({ email: testEmail, otp: '000000' });
+    expect(wrongVerifyRes.status).toBe(400);
+    expect(wrongVerifyRes.body.error.code).toBe('INVALID_OTP');
+
+    // 2c. Test verify-reset-code with correct OTP
+    const validVerifyRes = await request(app)
+      .post('/api/v1/auth/verify-reset-code')
+      .send({ email: testEmail, otp: knownOtp });
+    expect(validVerifyRes.status).toBe(200);
+    expect(validVerifyRes.body.valid).toBe(true);
+
     // 3. Reset password with new password
     const resetRes = await request(app)
       .post('/api/v1/auth/reset-password')
