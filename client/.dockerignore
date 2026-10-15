@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+.env.*
+src/App.test.jsx
+.git

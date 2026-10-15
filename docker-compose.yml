@@ -11,12 +11,55 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - viek-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-viek_client_management_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: viek-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-viek_client_management_db}
+      JWT_SECRET: ${JWT_SECRET:-viek_super_secret_jwt_key_at_least_32_chars_long!}
+      JWT_EXPIRES_IN: 15m
+      REFRESH_TOKEN_EXPIRES_IN: 30d
+      FRONTEND_ORIGIN: http://localhost:8080
+      MAIL_DRIVER: log
+    ports:
+      - "4000:4000"
+    networks:
+      - viek-network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: viek-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "8080:80"
+    networks:
+      - viek-network
+
 volumes:
   postgres_data:
     name: viek_postgres_data
+
+networks:
+  viek-network:
+    name: viek-network
+    driver: bridge

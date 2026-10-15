@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: viek-client
+  namespace: viek-system
+  labels:
+    app: viek-client
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: viek-client
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: viek-client
+    spec:
+      containers:
+        - name: client
+          image: viek-client:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: viek-client
+  namespace: viek-system
+  labels:
+    app: viek-client
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  selector:
+    app: viek-client

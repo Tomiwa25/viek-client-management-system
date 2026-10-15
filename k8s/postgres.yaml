@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: viek-postgres-pvc
+  namespace: viek-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: viek-postgres
+  namespace: viek-system
+  labels:
+    app: viek-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: viek-postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: viek-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: viek-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: viek-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: viek-secrets
+                  key: POSTGRES_DB
+          ports:
+            - containerPort: 5432
+              name: postgres
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["psql", "-U", "postgres", "-c", "SELECT 1"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["psql", "-U", "postgres", "-c", "SELECT 1"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: viek-postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: viek-postgres
+  namespace: viek-system
+  labels:
+    app: viek-postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: viek-postgres

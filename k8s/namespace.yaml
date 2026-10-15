@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: viek-system
+  labels:
+    app.kubernetes.io/name: viek-client-management
+    app.kubernetes.io/part-of: clientflow
