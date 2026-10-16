@@ -44,6 +44,12 @@ export default function AppLayout() {
             >
               Tasks
             </NavLink>
+            <NavLink
+              to="/overview"
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              Overview
+            </NavLink>
           </nav>
         </div>
 
@@ -64,7 +70,7 @@ export default function AppLayout() {
       </header>
 
       <main className="shell-content">
-        <Outlet />
+        {children || <Outlet />}
       </main>
     </div>
   );
