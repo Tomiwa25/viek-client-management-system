@@ -7,6 +7,7 @@ import { leadsRouter } from './src/routes/leads.routes.js';
 import { clientsRouter } from './src/routes/clients.routes.js';
 import { tasksRouter } from './src/routes/tasks.routes.js';
 import { interactionsRouter } from './src/routes/interactions.routes.js';
+import { teamRouter } from './src/routes/team.routes.js';
 
 export function createApp({ frontendOrigin = 'http://localhost:5173' } = {}) {
   const app = express();
@@ -18,6 +19,7 @@ export function createApp({ frontendOrigin = 'http://localhost:5173' } = {}) {
 
   app.get('/api/v1/health', (_req, res) => res.json({ status: 'ok', service: 'clientflow-api' }));
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/team', teamRouter);
   app.use('/api/v1/leads', leadsRouter);
   app.use('/api/v1/clients', clientsRouter);
   app.use('/api/v1/tasks', tasksRouter);

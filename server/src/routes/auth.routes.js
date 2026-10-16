@@ -741,3 +741,187 @@ authRouter.post('/reset-password', async (req, res, next) => {
   }
 });
 
+const acceptInviteSchema = z.object({
+  token: z.string().trim().min(1, 'Invitation token is required'),
+  fullName: z.string().trim().min(2, 'Full name must be at least 2 characters'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+/**
+ * GET /api/v1/auth/invitation
+ * Check validity of an invitation token and return organization details
+ */
+authRouter.get('/invitation', async (req, res, next) => {
+  try {
+    const rawToken = req.query.token;
+    if (!rawToken || typeof rawToken !== 'string') {
+      return res.status(400).json({
+        error: { code: 'INVALID_TOKEN', message: 'Invitation token is required.' },
+      });
+    }
+
+    const tokenHash = hashToken(rawToken.trim());
+    const invitation = await prisma.invitation.findFirst({
+      where: {
+        tokenHash,
+        status: 'PENDING',
+      },
+      include: {
+        organization: { select: { name: true, slug: true } },
+        invitedBy: { select: { fullName: true, email: true } },
+      },
+    });
+
+    if (!invitation) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_INVITATION',
+          message: 'This invitation link is invalid, has been revoked, or has already been accepted.',
+        },
+      });
+    }
+
+    if (new Date(invitation.expiresAt) <= new Date()) {
+      return res.status(400).json({
+        error: {
+          code: 'INVITATION_EXPIRED',
+          message: 'This invitation has expired. Please ask your administrator to send a new invite.',
+        },
+      });
+    }
+
+    return res.status(200).json({
+      invitation: {
+        id: invitation.id,
+        email: invitation.email,
+        role: invitation.role,
+        organizationName: invitation.organization.name,
+        inviterName: invitation.invitedBy?.fullName || invitation.invitedBy?.email,
+        expiresAt: invitation.expiresAt,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/auth/accept-invite
+ * Accepts invitation, activates user account, sets password, and logs user in
+ */
+authRouter.post('/accept-invite', async (req, res, next) => {
+  try {
+    const { token, fullName, password } = acceptInviteSchema.parse(req.body);
+    const tokenHash = hashToken(token.trim());
+
+    const invitation = await prisma.invitation.findFirst({
+      where: {
+        tokenHash,
+        status: 'PENDING',
+      },
+      include: {
+        organization: true,
+      },
+    });
+
+    if (!invitation) {
+      return res.status(400).json({
+        error: {
+          code: 'INVALID_INVITATION',
+          message: 'This invitation link is invalid, has been revoked, or has already been accepted.',
+        },
+      });
+    }
+
+    if (new Date(invitation.expiresAt) <= new Date()) {
+      return res.status(400).json({
+        error: {
+          code: 'INVITATION_EXPIRED',
+          message: 'This invitation has expired. Please ask your administrator to send a new invite.',
+        },
+      });
+    }
+
+    const passwordHash = await hashPassword(password);
+
+    const [user] = await prisma.$transaction(async (tx) => {
+      // 1. Create or update user as ACTIVE
+      const activeUser = await tx.user.upsert({
+        where: { email: invitation.email },
+        update: {
+          fullName,
+          passwordHash,
+          role: invitation.role,
+          status: 'ACTIVE',
+          organizationId: invitation.organizationId,
+        },
+        create: {
+          organizationId: invitation.organizationId,
+          email: invitation.email,
+          fullName,
+          passwordHash,
+          role: invitation.role,
+          status: 'ACTIVE',
+        },
+      });
+
+      // 2. Mark invitation as ACCEPTED
+      await tx.invitation.update({
+        where: { id: invitation.id },
+        data: { status: 'ACCEPTED' },
+      });
+
+      return [activeUser];
+    });
+
+    // 3. Issue session tokens and log user in automatically
+    const rawRefreshToken = crypto.randomBytes(40).toString('hex');
+    const refreshTokenHash = hashToken(rawRefreshToken);
+    const sessionDays = 7;
+    const expiresAt = new Date(Date.now() + sessionDays * 24 * 60 * 60 * 1000);
+
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshTokenHash,
+        rememberMe: false,
+        expiresAt,
+      },
+    });
+
+    const accessToken = signAccessToken({
+      id: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      role: user.role,
+    });
+
+    setRefreshCookie(res, rawRefreshToken, false);
+
+    return res.status(200).json({
+      message: 'Invitation accepted and account activated successfully.',
+      accessToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        status: user.status,
+        organization: {
+          id: invitation.organization.id,
+          name: invitation.organization.name,
+          slug: invitation.organization.slug,
+        },
+      },
+    });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: err.errors[0].message },
+      });
+    }
+    next(err);
+  }
+});
+
+

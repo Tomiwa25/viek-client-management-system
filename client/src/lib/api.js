@@ -97,6 +97,17 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email, otp, newPassword }),
     }),
+
+  getInvitation: (token) =>
+    request(`/api/v1/auth/invitation?token=${encodeURIComponent(token)}`, {
+      method: 'GET',
+    }),
+
+  acceptInvite: ({ token, fullName, password }) =>
+    request('/api/v1/auth/accept-invite', {
+      method: 'POST',
+      body: JSON.stringify({ token, fullName, password }),
+    }),
 };
 
 function buildQuery(params = {}) {
@@ -136,6 +147,46 @@ export const crmApi = {
     list: (params) => request(`/api/v1/interactions${buildQuery(params)}`),
     create: (data) => request('/api/v1/interactions', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id) => request(`/api/v1/interactions/${id}`, { method: 'DELETE' }),
+  },
+};
+
+export const teamApi = {
+  members: {
+    list: () => request('/api/v1/team/members'),
+    updateRole: (id, role) =>
+      request(`/api/v1/team/members/${id}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role }),
+      }),
+    updateStatus: (id, status, reason) =>
+      request(`/api/v1/team/members/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason }),
+      }),
+  },
+  invitations: {
+    list: () => request('/api/v1/team/invitations'),
+    create: ({ email, role }) =>
+      request('/api/v1/team/invitations', {
+        method: 'POST',
+        body: JSON.stringify({ email, role }),
+      }),
+    resend: (id) =>
+      request(`/api/v1/team/invitations/${id}/resend`, {
+        method: 'POST',
+      }),
+    reminder: (id) =>
+      request(`/api/v1/team/invitations/${id}/reminder`, {
+        method: 'POST',
+      }),
+    revoke: (id) =>
+      request(`/api/v1/team/invitations/${id}`, {
+        method: 'DELETE',
+      }),
+    processReminders: () =>
+      request('/api/v1/team/invitations/process-reminders', {
+        method: 'POST',
+      }),
   },
 };
 

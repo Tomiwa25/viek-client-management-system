@@ -14,6 +14,8 @@ import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Clients from './pages/Clients';
 import Tasks from './pages/Tasks';
+import Team from './pages/Team';
+import AcceptInvite from './pages/AcceptInvite';
 
 function NotFound() {
   return (
@@ -60,6 +62,7 @@ function AppRoutes() {
         <Route path="/leads" element={<Leads />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/tasks" element={<Tasks />} />
+        <Route path="/team" element={<Team />} />
       </Route>
 
       {/* Public platform overview & blueprint showcase */}
@@ -72,6 +75,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/verify-reset-code" element={<VerifyResetCode />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

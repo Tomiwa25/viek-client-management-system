@@ -30,8 +30,16 @@ export function generateOtp() {
 }
 
 /**
+ * Generate a cryptographically secure random token (64 hex chars)
+ */
+export function generateInvitationToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+/**
  * SHA-256 hash helper for tokens/OTPs before storing in the database
  */
 export function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
+
