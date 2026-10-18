@@ -74,6 +74,7 @@ model Organization {
   leads        Lead[]
   tasks        Task[]
   interactions Interaction[]
+  projects     Project[]
 
   @@map("organizations")
 }
@@ -171,6 +172,7 @@ model Client {
   owner        User?         @relation("ClientOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   tasks        Task[]
   interactions Interaction[]
+  projects     Project[]
   convertedFrom Lead?        @relation("LeadConvertedClient")
 
   @@index([organizationId])
@@ -242,3 +244,22 @@ model Interaction {
   @@index([clientId])
   @@map("interactions")
 }
+
+model Project {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  clientId       String    @map("client_id") @db.Uuid
+  name           String    @db.VarChar(255)
+  description    String?   @db.Text
+  status         String    @default("active") @db.VarChar(50)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client         Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([organizationId, clientId])
+  @@map("projects")
+}
+

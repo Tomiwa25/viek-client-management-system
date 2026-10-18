@@ -148,6 +148,12 @@ export const crmApi = {
     create: (data) => request('/api/v1/interactions', { method: 'POST', body: JSON.stringify(data) }),
     delete: (id) => request(`/api/v1/interactions/${id}`, { method: 'DELETE' }),
   },
+  projects: {
+    list: (params) => request(`/api/v1/projects${buildQuery(params)}`),
+    create: (data) => request('/api/v1/projects', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/api/v1/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (id) => request(`/api/v1/projects/${id}`, { method: 'DELETE' }),
+  },
 };
 
 export const teamApi = {

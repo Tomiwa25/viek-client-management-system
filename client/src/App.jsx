@@ -14,8 +14,7 @@ import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Clients from './pages/Clients';
 import Tasks from './pages/Tasks';
-import Team from './pages/Team';
-import AcceptInvite from './pages/AcceptInvite';
+import Projects from './pages/Projects';
 
 function NotFound() {
   return (
@@ -61,6 +60,7 @@ function AppRoutes() {
       >
         <Route path="/leads" element={<Leads />} />
         <Route path="/clients" element={<Clients />} />
+        <Route path="/projects" element={<Projects />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/team" element={<Team />} />
       </Route>

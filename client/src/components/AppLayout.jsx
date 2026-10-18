@@ -39,6 +39,12 @@ export default function AppLayout({ children }) {
               Clients
             </NavLink>
             <NavLink
+              to="/projects"
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              Projects
+            </NavLink>
+            <NavLink
               to="/tasks"
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             >
