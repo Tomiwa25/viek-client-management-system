@@ -8,6 +8,7 @@ import { clientsRouter } from './src/routes/clients.routes.js';
 import { tasksRouter } from './src/routes/tasks.routes.js';
 import { interactionsRouter } from './src/routes/interactions.routes.js';
 import { projectsRouter } from './src/routes/projects.routes.js';
+import { teamRouter } from './src/routes/team.routes.js';
 
 export function createApp({ frontendOrigin = 'http://localhost:5173' } = {}) {
   const app = express();
