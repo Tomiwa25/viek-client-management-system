@@ -50,6 +50,14 @@ export default function AppLayout({ children }) {
             >
               Tasks
             </NavLink>
+            {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+              <NavLink
+                to="/team"
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+              >
+                Team
+              </NavLink>
+            )}
             <NavLink
               to="/overview"
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}

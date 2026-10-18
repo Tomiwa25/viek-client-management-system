@@ -80,6 +80,16 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const setSession = (accessToken, userData) => {
+    if (accessToken) {
+      localStorage.setItem('token', accessToken);
+      setToken(accessToken);
+    }
+    if (userData) {
+      queryClient.setQueryData(['auth', 'me'], userData);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -92,6 +102,7 @@ export function AuthProvider({ children }) {
         verifyMutation,
         resendMutation,
         logout,
+        setSession,
         refetchUser: refetch,
       }}
     >

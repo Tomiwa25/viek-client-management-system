@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { authApi, crmApi, ApiError, request } from './lib/api';
+import { authApi, crmApi, teamApi, ApiError, request } from './lib/api';
 
 const createLocalStorageMock = () => {
   let store = {};
@@ -301,6 +301,131 @@ describe('Auth Client & Form Logic Tests', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/v1/projects/p-1',
         expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+  });
+
+  describe('Team & Invitation API helpers (FR-02)', () => {
+    it('dispatches getInvitation request with encoded token', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          invitation: { email: 'invite@test.com', organizationName: 'Acme Corp', role: 'MANAGER' },
+        }),
+      });
+      global.fetch = mockFetch;
+
+      const res = await authApi.getInvitation('tok 123');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/auth/invitation?token=tok%20123',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(res.invitation.role).toBe('MANAGER');
+    });
+
+    it('dispatches acceptInvite payload with token, fullName, password', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          message: 'Account activated',
+          accessToken: 'jwt-active-123',
+          user: { id: 'u-1', email: 'invite@test.com' },
+        }),
+      });
+      global.fetch = mockFetch;
+
+      const res = await authApi.acceptInvite({
+        token: 'valid-token',
+        fullName: 'Jane Doe',
+        password: 'PassWord123!',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/auth/accept-invite',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            token: 'valid-token',
+            fullName: 'Jane Doe',
+            password: 'PassWord123!',
+          }),
+        })
+      );
+      expect(res.accessToken).toBe('jwt-active-123');
+    });
+
+    it('teamApi dispatches member role update and status update', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ user: { id: 'u-2', role: 'ADMIN', status: 'ACTIVE' } }),
+      });
+      global.fetch = mockFetch;
+
+      await teamApi.members.updateRole('u-2', 'ADMIN');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/team/members/u-2/role',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ role: 'ADMIN' }),
+        })
+      );
+
+      await teamApi.members.updateStatus('u-2', 'SUSPENDED', 'Contract ended');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/team/members/u-2/status',
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'SUSPENDED', reason: 'Contract ended' }),
+        })
+      );
+    });
+
+    it('teamApi dispatches invitation operations (create, resend, reminder, revoke, processReminders)', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ success: true, sentCount: 1 }),
+      });
+      global.fetch = mockFetch;
+
+      await teamApi.invitations.create({ email: 'new@acme.org', role: 'MANAGER' });
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/team/invitations',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ email: 'new@acme.org', role: 'MANAGER' }),
+        })
+      );
+
+      await teamApi.invitations.resend('inv-1');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/team/invitations/inv-1/resend',
+        expect.objectContaining({ method: 'POST' })
+      );
+
+      await teamApi.invitations.reminder('inv-1');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/team/invitations/inv-1/reminder',
+        expect.objectContaining({ method: 'POST' })
+      );
+
+      await teamApi.invitations.revoke('inv-1');
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/team/invitations/inv-1',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+
+      await teamApi.invitations.processReminders();
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/team/invitations/process-reminders',
+        expect.objectContaining({ method: 'POST' })
       );
     });
   });

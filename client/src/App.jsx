@@ -62,6 +62,7 @@ function AppRoutes() {
         <Route path="/clients" element={<Clients />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/tasks" element={<Tasks />} />
+        <Route path="/team" element={<Team />} />
       </Route>
 
       {/* Public platform overview & blueprint showcase */}
@@ -74,6 +75,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/verify-reset-code" element={<VerifyResetCode />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/accept-invite" element={<AcceptInvite />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
