@@ -80,6 +80,7 @@ clientsRouter.get('/', async (req, res, next) => {
     ]);
 
     res.json({
+      data: clients,
       clients,
       pagination: {
         total,

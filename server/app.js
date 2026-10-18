@@ -7,6 +7,7 @@ import { leadsRouter } from './src/routes/leads.routes.js';
 import { clientsRouter } from './src/routes/clients.routes.js';
 import { tasksRouter } from './src/routes/tasks.routes.js';
 import { interactionsRouter } from './src/routes/interactions.routes.js';
+import { projectsRouter } from './src/routes/projects.routes.js';
 
 export function createApp({ frontendOrigin = 'http://localhost:5173' } = {}) {
   const app = express();
@@ -22,6 +23,15 @@ export function createApp({ frontendOrigin = 'http://localhost:5173' } = {}) {
   app.use('/api/v1/clients', clientsRouter);
   app.use('/api/v1/tasks', tasksRouter);
   app.use('/api/v1/interactions', interactionsRouter);
+  app.use('/api/v1/projects', projectsRouter);
+
+  // Legacy / assessment API compatibility routes
+  app.use('/api/projects', projectsRouter);
+  app.use('/api/clients', clientsRouter);
+  app.use('/api/login', (req, res, next) => {
+    req.url = '/login';
+    authRouter(req, res, next);
+  });
 
   app.use('/api/v1', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found' } }));
   app.use((err, _req, res, _next) => {

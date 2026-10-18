@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function AppLayout() {
+export default function AppLayout({ children }) {
   const { user, logout } = useAuth();
 
   return (
@@ -37,6 +37,12 @@ export default function AppLayout() {
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             >
               Clients
+            </NavLink>
+            <NavLink
+              to="/projects"
+              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            >
+              Projects
             </NavLink>
             <NavLink
               to="/tasks"

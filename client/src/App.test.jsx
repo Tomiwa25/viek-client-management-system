@@ -240,5 +240,68 @@ describe('Auth Client & Form Logic Tests', () => {
         })
       );
     });
+
+    it('dispatches projects list query with optional clientId filter', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ projects: [{ id: 'p-1', name: 'Website' }] }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await crmApi.projects.list({ clientId: 'client-123' });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/projects?clientId=client-123',
+        expect.anything()
+      );
+      expect(result.projects[0].name).toBe('Website');
+    });
+
+    it('dispatches project creation with client association', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 201,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ project: { id: 'p-1', name: 'Mobile App' } }),
+      });
+      global.fetch = mockFetch;
+
+      await crmApi.projects.create({
+        name: 'Mobile App',
+        clientId: 'client-123',
+        description: 'React Native app',
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/projects',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'Mobile App',
+            clientId: 'client-123',
+            description: 'React Native app',
+          }),
+        })
+      );
+    });
+
+    it('dispatches project deletion', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ message: 'Project deleted successfully' }),
+      });
+      global.fetch = mockFetch;
+
+      await crmApi.projects.delete('p-1');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/v1/projects/p-1',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
   });
 });
